@@ -1,20 +1,22 @@
 # Tiny Tapeout project information
 project:
-  title:        "COMPAX memory trial: UART + 64 B latch memory"
+  title:        "COMPAX: 64 B flop memory with BDI codec"
   author:       "Ayush Jain"
   discord:      ""
-  description:  "Trial of a latch-based 64-byte memory with a UART read/write interface, to validate latch storage in the Tiny Tapeout flow before building COMPAX on it"
+  description:  "UART-controlled 64-byte flop memory with lossless 16-byte BDI block compression and decompression"
   language:     "Verilog"
   clock_hz:     25000000
 
   tiles: "2x2"
 
-  top_module:  "tt_um_ayush130305_memtrial"
+  top_module:  "tt_um_ayush130305_compax"
 
   source_files:
-    - "project.v"
-    - "cmd_fsm.v"
-    - "latch_mem.v"
+    - "compax_top.v"
+    - "compax_controller.v"
+    - "flop_mem.v"
+    - "bdi_encoder.v"
+    - "bdi_decoder.v"
     - "uart_rx.v"
     - "uart_tx.v"
 

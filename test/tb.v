@@ -28,7 +28,7 @@ module tb ();
 `endif
 
   // Replace tt_um_example with your module name:
-  tt_um_ayush130305_memtrial user_project (
+  tt_um_ayush130305_compax user_project (
 
       // Include power ports for the Gate Level test:
 `ifdef GL_TEST
@@ -50,7 +50,7 @@ endmodule
 
 
 // Decorative metal artwork has no ports or electrical simulation behavior.
-// RTL gets its declaration from project.v; gate-level builds need this stub.
+// RTL gets its declaration from compax_top.v; gate-level builds need this stub.
 `ifdef GL_TEST
 module compax_art ();
 endmodule
