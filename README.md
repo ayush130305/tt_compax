@@ -1,4 +1,4 @@
-# tt_compax_memtrial: latch memory feasibility trial
+# tt_compax: latch memory feasibility trial
 
 A small Tiny Tapeout design whose only job is to answer one question for COMPAX: **does a latch-based 64-byte memory survive the Tiny Tapeout flow** (LibreLane hardening, precheck, gate-level test)?
 
