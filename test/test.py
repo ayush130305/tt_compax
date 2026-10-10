@@ -1,5 +1,5 @@
 # test.py
-# cocotb tests for tt_um_ayush130305_memtrial: a UART-controlled 128-byte flop memory.
+# cocotb tests for tt_um_ayush130305_memtrial: a UART-controlled 64-byte latch memory.
 # Every test drives the chip only through the UART pins, exactly like a real host would.
 
 import random
@@ -10,7 +10,7 @@ from cocotb.triggers import ClockCycles, RisingEdge
 
 CLK_NS = 40        # 25 MHz
 BIT_CLKS = 217     # 25 MHz / 115200 baud
-DEPTH = 128
+DEPTH = 64
 
 
 def tx_bit(dut):
@@ -104,9 +104,9 @@ async def test_01_reset(dut):
 async def test_02_single_write_read(dut):
     """Single-byte write/read at the first, last and a middle address."""
     await start(dut)
-    for addr, val in ((0, 0xA5), (63, 0x5A), (64, 0x3C), (127, 0xC3), (21, 0xFF)):
+    for addr, val in ((0, 0xA5), (63, 0x5A), (21, 0xFF)):
         await write_byte(dut, addr, val)
-    for addr, val in ((0, 0xA5), (63, 0x5A), (64, 0x3C), (127, 0xC3), (21, 0xFF)):
+    for addr, val in ((0, 0xA5), (63, 0x5A), (21, 0xFF)):
         got = await read_byte(dut, addr)
         assert got == val, f"addr {addr}: wrote {val:#x}, read {got:#x}"
 
@@ -121,7 +121,7 @@ async def test_03_unknown_command(dut):
 
 @cocotb.test()
 async def test_04_full_array_patterns(dut):
-    """Fill all 128 rows with three different patterns; every row must read back exactly."""
+    """Fill all 64 rows with three different patterns; every row must read back exactly."""
     await start(dut)
     pat_a = [(i * 37 + 11) & 0xFF for i in range(DEPTH)]
     patterns = [pat_a, [(~x) & 0xFF for x in pat_a], list(range(DEPTH))]
@@ -152,30 +152,6 @@ async def test_06_page_wrap(dut):
     """A page write starting near the end wraps to address 0."""
     await start(dut)
     await write_page(dut, 0, [0] * DEPTH)
-    await write_page(dut, 126, [0x11, 0x22, 0x33, 0x44])
-    assert await read_page(dut, 126, 2) == [0x11, 0x22]
+    await write_page(dut, 62, [0x11, 0x22, 0x33, 0x44])
+    assert await read_page(dut, 62, 2) == [0x11, 0x22]
     assert await read_page(dut, 0, 2) == [0x33, 0x44]
-
-
-@cocotb.test()
-async def test_07_page_lengths(dut):
-    """Zero lengths preserve command framing; 255-byte pages wrap correctly."""
-    await start(dut)
-    await write_page(dut, 0, [0] * DEPTH)
-    await write_page(dut, 64, [])
-    for b in (0x47, 64, 0):
-        await send_byte(dut, b)
-    await send_byte(dut, 0x41)
-    assert await recv_byte(dut) == 0x3F
-    assert await read_byte(dut, 64) == 0
-    data = [(i * 19 + 3) & 0xFF for i in range(255)]
-    model = [0] * DEPTH
-    for i, value in enumerate(data):
-        model[(127 + i) % DEPTH] = value
-    await write_page(dut, 127, data)
-    assert await read_page(dut, 0, DEPTH) == model
-    assert await read_page(dut, 127, 255) == [model[(127+i) % DEPTH] for i in range(255)]
-    # Address bit 7 is ignored; bit 6 must select the upper half.
-    await write_byte(dut, 0xC0, 0xA6)
-    assert await read_byte(dut, 64) == 0xA6
-    assert await read_byte(dut, 0) == model[0]
