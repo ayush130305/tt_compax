@@ -9,11 +9,11 @@ MACRO compax_art
   CLASS BLOCK ;
   ORIGIN 0 0 ;
   FOREIGN compax_art 0 0 ;
-  SIZE 60 BY 66 ;
+  SIZE 32 BY 42 ;
   SYMMETRY X Y ;
   OBS
     LAYER met4 ;
-    RECT 0 0 60 66 ;
+    RECT 0 0 32 42 ;
   END
 END compax_art
 END LIBRARY
