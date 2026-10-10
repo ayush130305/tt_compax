@@ -25,6 +25,9 @@ module latch_mem #(
         wd_q <= wdata;
     end
 
+    // The latches below are intentional, so silence Verilator's LATCH lint for this module.
+    /* verilator lint_off LATCH */
+
     // Storage rows.
     reg [7:0] mem [0:DEPTH-1];
 
@@ -50,6 +53,8 @@ module latch_mem #(
             end
         end
     endgenerate
+
+    /* verilator lint_on LATCH */
 
     // Combinational read port.
     assign rdata = mem[raddr];
