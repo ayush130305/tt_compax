@@ -3,10 +3,6 @@
 
 `default_nettype none
 
-(* blackbox *) (* keep *)
-module compax_art ();
-endmodule
-
 module tt_um_ayush130305_compax (
     input  wire [7:0] ui_in,   // dedicated inputs
     output wire [7:0] uo_out,  // dedicated outputs
@@ -17,9 +13,6 @@ module tt_um_ayush130305_compax (
     input  wire       clk,     // system clock
     input  wire       rst_n    // active-low reset
 );
-    (* keep *)
-    compax_art art();
-
     // UART timing parameters, matched to clock_hz in info.yaml.
     localparam integer CLK_FREQ  = 25_000_000;
     localparam integer BAUD_RATE = 115_200;
