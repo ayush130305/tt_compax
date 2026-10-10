@@ -1,5 +1,5 @@
 // project.v
-// Tiny Tapeout trial: UART-controlled 64-byte latch memory. Purpose: check that latch-based
+// Tiny Tapeout trial: UART-controlled 128-byte flop memory. Purpose: check that flop-based
 // storage survives the Tiny Tapeout flow (gds, precheck, gate-level test) before building COMPAX on it.
 //   ui_in[0] = UART RX, uo_out[0] = UART TX. All other pins unused.
 
@@ -25,7 +25,7 @@ module tt_um_ayush130305_memtrial (
     // Wires between receiver, command FSM, transmitter and memory.
     wire [7:0] rx_data, tx_data, mem_wdata, mem_rdata;
     wire       rx_valid, tx_start, tx_busy, tx_line, mem_we;
-    wire [5:0] mem_addr;
+    wire [6:0] mem_addr;
     wire unused_framing_error;
 
     // This contains the instantiation for the UART receiver.
@@ -48,8 +48,8 @@ module tt_um_ayush130305_memtrial (
         .tx_line(tx_line), .tx_busy(tx_busy)
     );
 
-    // This contains the instantiation for the latch memory.
-    latch_mem #(.DEPTH(64), .AW(6)) u_mem (
+    // This contains the instantiation for the flop memory.
+    latch_mem #(.DEPTH(128), .AW(7)) u_mem (
         .clk(clk), .we(mem_we), .waddr(mem_addr), .wdata(mem_wdata),
         .raddr(mem_addr), .rdata(mem_rdata)
     );

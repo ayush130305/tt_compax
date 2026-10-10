@@ -1,6 +1,6 @@
 ## How it works
 
-A UART (115200 baud at 25 MHz) controls a 64-byte memory built from latches instead of flip-flops. Commands:
+A UART (115200 baud at 25 MHz) controls a 128-byte memory built from flip-flops. Commands:
 
 | Command | Bytes sent | Reply |
 |---|---|---|
@@ -10,7 +10,7 @@ A UART (115200 baud at 25 MHz) controls a 64-byte memory built from latches inst
 | `G` (0x47) page read | addr, n | n data bytes |
 | anything else | | `?` (0x3F) |
 
-Addresses use the low 6 bits and wrap at 64. This is a feasibility trial for latch storage.
+Addresses use the low 7 bits and wrap at 128. Page lengths use all 8 bits (0–255): zero-length writes reply K, zero-length reads send nothing, and transfers longer than 128 wrap and revisit rows. This is a feasibility trial for flop storage.
 
 ## How to test
 

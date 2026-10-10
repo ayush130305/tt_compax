@@ -1,9 +1,9 @@
 # Tiny Tapeout project information
 project:
-  title:        "COMPAX memory trial: UART + 64 B latch memory"
+  title:        "COMPAX memory trial: UART + 128 B flop memory"
   author:       "Ayush Jain"
   discord:      ""
-  description:  "Trial of a latch-based 64-byte memory with a UART read/write interface, to validate latch storage in the Tiny Tapeout flow before building COMPAX on it"
+  description:  "128-byte flip-flop memory with a UART read/write interface; memory feasibility trial before building COMPAX"
   language:     "Verilog"
   clock_hz:     25000000
 

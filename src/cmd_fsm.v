@@ -2,7 +2,7 @@
 // UART command interpreter for the memory trial.
 //   'W' addr data        write one byte            -> 'K'
 //   'R' addr             read one byte             -> data
-//   'P' addr n d0..dn-1  page write, n bytes       -> 'K'   (address wraps at 64)
+//   'P' addr n d0..dn-1  page write, n bytes       -> 'K'   (address wraps at 128)
 //   'G' addr n           page read, n bytes        -> n data bytes
 //   anything else                                  -> '?'
 
@@ -17,7 +17,7 @@ module cmd_fsm (
     output reg        tx_start,  // transmit strobe
     input  wire       tx_busy,   // transmitter busy
     output reg        mem_we,    // memory write strobe
-    output reg  [5:0] mem_addr,  // memory address for both ports
+    output reg  [6:0] mem_addr,  // memory address for both ports
     output reg  [7:0] mem_wdata, // memory write data
     input  wire [7:0] mem_rdata  // memory read data
 );
@@ -29,8 +29,8 @@ module cmd_fsm (
 
     // Current state.
     reg [3:0] state;
-    // Bytes left in a page transfer.
-    reg [6:0] remaining;
+    // Bytes left in a page transfer: 0 through 255; addresses wrap at 128.
+    reg [7:0] remaining;
     // Reply byte for single-byte replies.
     reg [7:0] reply;
     // Cycles waited after starting a transmission.
@@ -41,13 +41,13 @@ module cmd_fsm (
         // Asynchronous reset puts everything in its idle state.
         if (rst) begin
             state     <= S_IDLE;
-            remaining <= 7'd0;
+            remaining <= 8'd0;
             reply     <= 8'd0;
             gap       <= 2'd0;
             tx_data   <= 8'd0;
             tx_start  <= 1'b0;
             mem_we    <= 1'b0;
-            mem_addr  <= 6'd0;
+            mem_addr  <= 7'd0;
             mem_wdata <= 8'd0;
         end else begin
             // Strobes last one cycle by default.
@@ -72,8 +72,8 @@ module cmd_fsm (
                 end
                 // Single write: address byte.
                 S_W_ADDR: if (rx_valid) begin
-                    // Low six bits address the memory.
-                    mem_addr <= rx_data[5:0];
+                    // Low seven bits address the memory.
+                    mem_addr <= rx_data[6:0];
                     state    <= S_W_DATA;
                 end
                 // Single write: data byte, then strobe the memory.
@@ -85,48 +85,48 @@ module cmd_fsm (
                 end
                 // Page write: start address.
                 S_P_ADDR: if (rx_valid) begin
-                    mem_addr <= rx_data[5:0];
+                    mem_addr <= rx_data[6:0];
                     state    <= S_P_LEN;
                 end
                 // Page write: byte count (0 means nothing to write).
                 S_P_LEN: if (rx_valid) begin
-                    remaining <= rx_data[6:0];
+                    remaining <= rx_data;
                     reply     <= 8'h4B; // 'K'
-                    state     <= (rx_data[6:0] == 7'd0) ? S_REPLY : S_P_DATA;
+                    state     <= (rx_data == 8'd0) ? S_REPLY : S_P_DATA;
                 end
                 // Page write: one data byte, strobe the memory.
                 S_P_DATA: if (rx_valid) begin
                     mem_wdata <= rx_data;
                     mem_we    <= 1'b1;
-                    remaining <= remaining - 7'd1;
+                    remaining <= remaining - 8'd1;
                     state     <= S_P_NEXT;
                 end
                 // Page write: advance the address after the write strobe cycle.
                 S_P_NEXT: begin
-                    mem_addr <= mem_addr + 6'd1;
-                    state    <= (remaining == 7'd0) ? S_REPLY : S_P_DATA;
+                    mem_addr <= mem_addr + 7'd1;
+                    state    <= (remaining == 8'd0) ? S_REPLY : S_P_DATA;
                 end
                 // Single read: address byte, then send one byte.
                 S_R_ADDR: if (rx_valid) begin
-                    mem_addr  <= rx_data[5:0];
-                    remaining <= 7'd1;
+                    mem_addr  <= rx_data[6:0];
+                    remaining <= 8'd1;
                     state     <= S_RD_SEND;
                 end
                 // Page read: start address.
                 S_G_ADDR: if (rx_valid) begin
-                    mem_addr <= rx_data[5:0];
+                    mem_addr <= rx_data[6:0];
                     state    <= S_G_LEN;
                 end
                 // Page read: byte count.
                 S_G_LEN: if (rx_valid) begin
-                    remaining <= rx_data[6:0];
-                    state     <= (rx_data[6:0] == 7'd0) ? S_IDLE : S_RD_SEND;
+                    remaining <= rx_data;
+                    state     <= (rx_data == 8'd0) ? S_IDLE : S_RD_SEND;
                 end
                 // Send the addressed byte once the transmitter is free.
                 S_RD_SEND: if (!tx_busy) begin
                     tx_data   <= mem_rdata;
                     tx_start  <= 1'b1;
-                    remaining <= remaining - 7'd1;
+                    remaining <= remaining - 8'd1;
                     gap       <= 2'd0;
                     state     <= S_RD_GAP;
                 end
@@ -135,9 +135,9 @@ module cmd_fsm (
                     gap <= gap + 2'd1;
                     if (gap == 2'd2) begin
                         // Last byte done, or step to the next address.
-                        if (remaining == 7'd0) state <= S_IDLE;
+                        if (remaining == 8'd0) state <= S_IDLE;
                         else begin
-                            mem_addr <= mem_addr + 6'd1;
+                            mem_addr <= mem_addr + 7'd1;
                             state    <= S_RD_SEND;
                         end
                     end
