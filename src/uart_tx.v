@@ -19,6 +19,13 @@ module uart_tx #(
 
     // ---- Tick generator: identical structure to uart_rx's ----
     localparam integer DIVISOR = CLK_FREQ / (BAUD_RATE * OVERSAMPLE);
+    // Sized terminal counts match the existing counter widths.
+    // Valid parameter range: 1 <= DIVISOR <= 65536,
+    // and even OVERSAMPLE values from 2 through 32.
+    localparam integer TICK_LAST_INT = DIVISOR - 1;
+    localparam integer BIT_LAST_INT  = OVERSAMPLE - 1;
+    localparam [15:0] TICK_LAST = TICK_LAST_INT[15:0];
+    localparam [4:0]  BIT_LAST  = BIT_LAST_INT[4:0];
 
     reg [15:0] tick_counter;
     wire       tick_pulse;
@@ -26,13 +33,13 @@ module uart_tx #(
     always @(posedge clk or posedge rst) begin
         if (rst)
             tick_counter <= 16'd0;
-        else if (tick_counter == DIVISOR - 1)
+        else if (tick_counter == TICK_LAST)
             tick_counter <= 16'd0;
         else
             tick_counter <= tick_counter + 16'd1;
     end
 
-    assign tick_pulse = (tick_counter == DIVISOR - 1);
+    assign tick_pulse = (tick_counter == TICK_LAST);
 
     // ---- FSM ----
     localparam [1:0] IDLE      = 2'd0;
@@ -69,7 +76,7 @@ module uart_tx #(
                 START_BIT: begin
                     tx_line <= 1'b0;   // start bit is always LOW
                     if (tick_pulse) begin
-                        if (bit_timer == (OVERSAMPLE - 1)) begin
+                        if (bit_timer == BIT_LAST) begin
                             bit_timer <= 5'd0;
                             bit_index <= 3'd0;
                             state     <= DATA;
@@ -82,7 +89,7 @@ module uart_tx #(
                 DATA: begin
                     tx_line <= shift_reg[bit_index];  // LSB first
                     if (tick_pulse) begin
-                        if (bit_timer == (OVERSAMPLE - 1)) begin
+                        if (bit_timer == BIT_LAST) begin
                             bit_timer <= 5'd0;
                             if (bit_index == 3'd7) begin
                                 state <= STOP_BIT;
@@ -98,7 +105,7 @@ module uart_tx #(
                 STOP_BIT: begin
                     tx_line <= 1'b1;   // stop bit is always HIGH
                     if (tick_pulse) begin
-                        if (bit_timer == (OVERSAMPLE - 1)) begin
+                        if (bit_timer == BIT_LAST) begin
                             bit_timer <= 5'd0;
                             tx_busy   <= 1'b0;
                             state     <= IDLE;

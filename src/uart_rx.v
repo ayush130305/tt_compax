@@ -20,6 +20,15 @@ module uart_rx #(
 
     // ---- Tick generator: system clock -> oversample ticks ----
     localparam integer DIVISOR = CLK_FREQ / (BAUD_RATE * OVERSAMPLE);
+    // Sized terminal counts match the existing counter widths.
+    // Valid parameter range: 1 <= DIVISOR <= 65536,
+    // and even OVERSAMPLE values from 2 through 32.
+    localparam integer TICK_LAST_INT = DIVISOR - 1;
+    localparam integer BIT_LAST_INT  = OVERSAMPLE - 1;
+    localparam [15:0] TICK_LAST = TICK_LAST_INT[15:0];
+    localparam [4:0]  BIT_LAST  = BIT_LAST_INT[4:0];
+    localparam integer HALF_LAST_INT = OVERSAMPLE / 2 - 1;
+    localparam [4:0] HALF_LAST = HALF_LAST_INT[4:0];
 
     reg [15:0] tick_counter;
     wire       tick_pulse;
@@ -27,13 +36,13 @@ module uart_rx #(
     always @(posedge clk or posedge rst) begin
         if (rst)
             tick_counter <= 16'd0;
-        else if (tick_counter == DIVISOR - 1)
+        else if (tick_counter == TICK_LAST)
             tick_counter <= 16'd0;
         else
             tick_counter <= tick_counter + 16'd1;
     end
 
-    assign tick_pulse = (tick_counter == DIVISOR - 1);
+    assign tick_pulse = (tick_counter == TICK_LAST);
 
     // ---- FSM ----
     localparam [1:0] IDLE      = 2'd0;
@@ -70,7 +79,7 @@ module uart_rx #(
 
                 START_BIT: begin
                     if (tick_pulse) begin
-                        if (sample_counter == (OVERSAMPLE/2 - 1)) begin
+                        if (sample_counter == HALF_LAST) begin
                             if (rx_line == 1'b0) begin
                                 state          <= DATA;
                                 sample_counter <= 5'd0;
@@ -86,7 +95,7 @@ module uart_rx #(
 
                 DATA: begin
                     if (tick_pulse) begin
-                        if (sample_counter == (OVERSAMPLE - 1)) begin
+                        if (sample_counter == BIT_LAST) begin
                             shift_reg      <= {rx_line, shift_reg[7:1]};
                             sample_counter <= 5'd0;
                             if (bit_index == 3'd7) begin
@@ -102,7 +111,7 @@ module uart_rx #(
 
                 STOP_BIT: begin
                     if (tick_pulse) begin
-                        if (sample_counter == (OVERSAMPLE - 1)) begin
+                        if (sample_counter == BIT_LAST) begin
                             if (rx_line == 1'b1) begin
                                 rx_data  <= shift_reg;
                                 rx_valid <= 1'b1;

@@ -26,11 +26,12 @@ module tt_um_ayush130305_memtrial (
     wire [7:0] rx_data, tx_data, mem_wdata, mem_rdata;
     wire       rx_valid, tx_start, tx_busy, tx_line, mem_we;
     wire [5:0] mem_addr;
+    wire unused_framing_error;
 
     // This contains the instantiation for the UART receiver.
     uart_rx #(.CLK_FREQ(CLK_FREQ), .BAUD_RATE(BAUD_RATE)) u_rx (
         .clk(clk), .rst(rst), .rx_line(ui_in[0]),
-        .rx_data(rx_data), .rx_valid(rx_valid), .framing_error()
+        .rx_data(rx_data), .rx_valid(rx_valid), .framing_error(unused_framing_error)
     );
 
     // This contains the instantiation for the command FSM.
@@ -59,7 +60,7 @@ module tt_um_ayush130305_memtrial (
     assign uio_oe  = 8'h00;
 
     // Unused inputs.
-    wire _unused = &{ena, ui_in[7:1], uio_in, 1'b0};
+    wire _unused = &{ena, ui_in[7:1], uio_in, unused_framing_error, 1'b0};
 endmodule
 
 `default_nettype wire
