@@ -1,33 +1,33 @@
-# COMPAX BDI replacement files
+# COMPAX sequential BDI update
 
-This bundle updates the current 64-byte design. It does not change the metal
-artwork, macro placement, or flow configuration. Keep src/config.json and macros/.
+Apply this bundle to the current artwork-free COMPAX repository.
+UART protocol, four 16-byte slots, raw fallback, immediate masks, signed delta
+formats and write protection are preserved. Physical memory remains 64 bytes.
 
-Renames:
-- src/project.v -> src/compax_top.v
-- src/cmd_fsm.v -> src/compax_controller.v
-- src/latch_mem.v -> src/flop_mem.v
-- top tt_um_ayush130305_memtrial -> tt_um_ayush130305_compax
+The controller now scans and tests one word per clock, packing forwards and
+unpacking backwards. A lookahead register preserves source values during
+in-place buffer updates. One shared 32-bit add/subtract datapath handles both
+encoding and decoding. The existing 128-bit staging buffer remains; this update
+reduces arithmetic replication rather than adding a second block buffer.
 
-New synthesizable modules: bdi_encoder and bdi_decoder. Both are instantiated
-by compax_controller, which is instantiated by compax_top. The storage and UART
-modules are also reachable from the synthesis top. compax_art remains a physical
-black-box macro with a gate-level simulation stub.
+Remove src/bdi_encoder.v and src/bdi_decoder.v from the repository; they are
+replaced by src/bdi_word_alu.v and sequential states in compax_controller.v.
+info.yaml and test/Makefile select the new source. The reference encoder under
+test/ is simulation-only and is not listed in the synthesis source files.
 
-Update info.yaml, test/Makefile, test/tb.v, test/test.py, and docs/info.md with
-the included files. Remove the three obsolete source files after copying.
-UART source files are included unchanged for reproducible standalone simulation.
+Validation with Icarus:
+- 10000 randomized complete encode/store/decode operations compare every payload
+  byte, tag and immediate mask against the previous reference encoder.
+- Directed signed delta boundaries, zero/repeated formats, mixed immediates and
+  a first immediate followed by a non-immediate base all pass.
+- Full UART regression passes with 361 responses: three full-memory patterns,
+  five formats, repeated commands, metadata, write protection, invalid slots,
+  independent slots, raw access and page wrapping.
 
-Local Icarus verification: 10000 randomized codec round trips plus directed
-format selection, and full UART integration including encode/decode, metadata,
-repeat commands, write rejection, independent slots, raw reads/writes and wrap.
-The original six cocotb tests are retained and two codec UART tests are added.
-Cocotb, Verilator, synthesis, timing, DRC, LVS and gate-level execution must be
-checked in CI; no successful physical implementation is claimed for this revision.
+No synthesis, Verilator or physical flow was available locally. The exact area
+saving, timing and successful fit are unverified until the new CI run completes.
+The 2x2 tile choice, current flow settings, UART and artwork-free top are unchanged.
 
-See docs/info.md for the complete protocol and fixed-slot capacity limitations.
-The 128-bit working buffer adds 128 storage bits; four format/mask entries add
-28 bits, plus controller registers and combinational arithmetic. Area and timing
-will grow relative to the working memory-only design. Tile fit is unverified.
-
-BDI reference: https://users.ece.cmu.edu/~omutlu/pub/bdi-compression_pact12.pdf
+The original combinational codec_tb.sv is obsolete and should be removed.
+Use test/sequential_codec_tb.sv with test/bdi_reference_encoder.v for native
+randomized verification. Existing cocotb tests remain unchanged in the repository.

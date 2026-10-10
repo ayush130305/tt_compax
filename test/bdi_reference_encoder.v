@@ -2,7 +2,7 @@
 // Four little-endian 32-bit words. Payload byte zero is bits [7:0].
 // tag: 0 raw, 1 zero, 2 repeated word, 3 base32/delta8, 4 base32/delta16.
 // Immediate mask bit i selects zero instead of the stored base for word i.
-module bdi_encoder (
+module bdi_reference_encoder (
     input wire [127:0] block_in,
     output reg [127:0] payload,
     output reg [2:0] tag,

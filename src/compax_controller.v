@@ -27,7 +27,8 @@ module compax_controller (
                      S_G_ADDR = 5'd8, S_G_LEN = 5'd9, S_RD_SEND = 5'd10, S_RD_GAP = 5'd11,
                      S_REPLY = 5'd12, S_BLOCK_SLOT = 5'd13, S_BLOCK_FETCH = 5'd14,
                      S_BLOCK_TRANSFORM = 5'd15, S_BLOCK_WRITE = 5'd16, S_BLOCK_STEP = 5'd17,
-                     S_META_SEND = 5'd18, S_META_GAP = 5'd19;
+                     S_META_SEND = 5'd18, S_META_GAP = 5'd19, S_SCAN = 5'd20,
+                     S_CHECK = 5'd21, S_PACK = 5'd22, S_UNPACK = 5'd23, S_CODEC_FINISH = 5'd24;
 
     // Current state.
     reg [4:0] state;
@@ -39,9 +40,6 @@ module compax_controller (
     reg [1:0] gap;
 
     reg [127:0] block_buffer;
-    wire [127:0] encoded_payload, decoded_block;
-    wire [2:0] encoded_tag;
-    wire [3:0] encoded_mask;
     reg [2:0] block_tag [0:3];
     reg [3:0] block_mask [0:3];
     reg [1:0] slot;
@@ -62,15 +60,39 @@ module compax_controller (
             endcase
         end
     endfunction
-    bdi_encoder u_encoder(.block_in(block_buffer), .payload(encoded_payload),
-        .tag(encoded_tag), .immediate_mask(encoded_mask));
-    bdi_decoder u_decoder(.payload(block_buffer), .tag(block_tag[slot]),
-        .immediate_mask(block_mask[slot]), .block_out(decoded_block));
+    // One 32-bit datapath is reused for both delta subtraction and reconstruction.
+    reg [1:0] word_index;
+    reg wide_delta, found_base, all_zero, all_repeated, all_fit;
+    reg [31:0] base_value, word_cursor;
+    reg [3:0] candidate_mask;
+    reg [2:0] candidate_tag;
+    wire [31:0] selected_word = block_buffer[{word_index,5'b00000} +: 32];
+    wire [31:0] alu_word = (state==S_PACK || state==S_UNPACK) ? word_cursor : selected_word;
+    wire immediate_fit = wide_delta ?
+        (alu_word=={{16{alu_word[15]}},alu_word[15:0]}) :
+        (alu_word=={{24{alu_word[7]}},alu_word[7:0]});
+    wire decoding = (state==S_UNPACK);
+    wire use_zero_base = decoding ? block_mask[slot][word_index] : immediate_fit;
+    wire [31:0] alu_base = use_zero_base ? 32'd0 : base_value;
+    wire [31:0] alu_result;
+    wire delta_fit = wide_delta ?
+        (alu_result=={{16{alu_result[15]}},alu_result[15:0]}) :
+        (alu_result=={{24{alu_result[7]}},alu_result[7:0]});
+    wire [1:0] next_word_index = word_index + 2'd1;
+    wire [1:0] previous_word_index = word_index - 2'd1;
+    wire [7:0] previous_delta8 = block_buffer[7'd32+{2'b00,previous_word_index,3'b000} +: 8];
+    wire [15:0] previous_delta16 = block_buffer[7'd32+{1'b0,previous_word_index,4'b0000} +: 16];
+    bdi_word_alu u_codec_alu (.word_value(alu_word), .base_value(alu_base),
+        .subtract(!decoding), .result(alu_result));
 
     // This always block is the command state machine.
     always @(posedge clk or posedge rst) begin
         // Asynchronous reset puts everything in its idle state.
         if (rst) begin
+            word_index<=2'd0; wide_delta<=1'b0; found_base<=1'b0;
+            all_zero<=1'b0; all_repeated<=1'b0; all_fit<=1'b0;
+            candidate_mask<=4'd0; candidate_tag<=3'd0;
+            // Datapath registers are loaded before use and need no reset.
             reject_page_write <= 1'b0;
             slot <= 2'd0; byte_index <= 4'd0; operation <= 8'd0; meta_length <= 8'd0;
             for (reset_index=0; reset_index<4; reset_index=reset_index+1) begin
@@ -206,13 +228,73 @@ module compax_controller (
                     else begin byte_index<=byte_index+4'd1; mem_addr<=mem_addr+6'd1; end
                 end
                 S_BLOCK_TRANSFORM: begin
-                    if (operation==8'h43) begin
-                        block_buffer<=encoded_payload;
-                        block_tag[slot]<=encoded_tag; block_mask[slot]<=encoded_mask;
-                    end else begin
-                        block_buffer<=decoded_block;
-                        block_tag[slot]<=3'd0; block_mask[slot]<=4'd0;
+                    word_index<=2'd0; wide_delta<=1'b0; found_base<=1'b0;
+                    base_value<=block_buffer[31:0]; candidate_mask<=4'd0;
+                    all_zero<=1'b1; all_repeated<=1'b1; all_fit<=1'b1;
+                    if (operation==8'h43) state<=S_SCAN;
+                    else begin
+                        case(block_tag[slot])
+                            3'd1: begin block_buffer<=128'd0; state<=S_CODEC_FINISH; end
+                            3'd2: begin block_buffer<={4{block_buffer[31:0]}}; state<=S_CODEC_FINISH; end
+                            default: begin
+                                word_index<=2'd3; wide_delta<=(block_tag[slot]==3'd4);
+                                word_cursor<=(block_tag[slot]==3'd4) ?
+                                    {{16{block_buffer[95]}},block_buffer[95:80]} :
+                                    {{24{block_buffer[63]}},block_buffer[63:56]};
+                                state<=S_UNPACK;
+                            end
+                        endcase
                     end
+                end
+                // Scan one word each cycle, choosing the first non-immediate base.
+                S_SCAN: begin
+                    if (selected_word!=32'd0) all_zero<=1'b0;
+                    if (selected_word!=block_buffer[31:0]) all_repeated<=1'b0;
+                    if (!found_base && !immediate_fit) begin base_value<=selected_word; found_base<=1'b1; end
+                    if (word_index==2'd3) begin word_index<=2'd0; state<=S_CHECK; end
+                    else word_index<=next_word_index;
+                end
+                // Test all deltas before changing the input buffer.
+                S_CHECK: begin
+                    candidate_mask[word_index]<=immediate_fit;
+                    if (!delta_fit) all_fit<=1'b0;
+                    if (all_zero) begin block_buffer<=128'd0; candidate_tag<=3'd1; candidate_mask<=4'd0; state<=S_CODEC_FINISH; end
+                    else if (all_repeated) begin block_buffer[127:32]<=96'd0; candidate_tag<=3'd2; candidate_mask<=4'd0; state<=S_CODEC_FINISH; end
+                    else if (word_index==2'd3) begin
+                        if (all_fit && delta_fit) begin
+                            candidate_tag<=wide_delta ? 3'd4 : 3'd3;
+                            word_index<=2'd0; word_cursor<=block_buffer[31:0]; state<=S_PACK;
+                        end else if (!wide_delta) begin
+                            wide_delta<=1'b1; found_base<=1'b0; base_value<=block_buffer[31:0];
+                            word_index<=2'd0; all_fit<=1'b1; candidate_mask<=4'd0; state<=S_SCAN;
+                        end else begin candidate_tag<=3'd0; candidate_mask<=4'd0; state<=S_CODEC_FINISH; end
+                    end else word_index<=next_word_index;
+                end
+                // Capture the next source word before overlapping compacted writes.
+                S_PACK: begin
+                    if (wide_delta) block_buffer[7'd32+{1'b0,word_index,4'b0000} +: 16]<=alu_result[15:0];
+                    else block_buffer[7'd32+{2'b00,word_index,3'b000} +: 8]<=alu_result[7:0];
+                    word_cursor<=block_buffer[{next_word_index,5'b00000} +: 32];
+                    if (word_index==2'd3) state<=S_CODEC_FINISH;
+                    else word_index<=next_word_index;
+                end
+                // Expand backwards; save the next delta before an overlapping write.
+                S_UNPACK: begin
+                    block_buffer[{word_index,5'b00000} +: 32]<=alu_result;
+                    word_cursor<=wide_delta ? {{16{previous_delta16[15]}},previous_delta16} :
+                                             {{24{previous_delta8[7]}},previous_delta8};
+                    if (word_index==2'd0) state<=S_CODEC_FINISH;
+                    else word_index<=previous_word_index;
+                end
+                S_CODEC_FINISH: begin
+                    if (operation==8'h43) begin
+                        block_tag[slot]<=candidate_tag; block_mask[slot]<=candidate_mask;
+                        if (candidate_tag==3'd3 || candidate_tag==3'd4) begin
+                            block_buffer[31:0]<=base_value;
+                            if (candidate_tag==3'd3) block_buffer[127:64]<=64'd0;
+                            else block_buffer[127:96]<=32'd0;
+                        end
+                    end else begin block_tag[slot]<=3'd0; block_mask[slot]<=4'd0; end
                     byte_index<=4'd0; mem_addr<={slot,4'd0}; state<=S_BLOCK_WRITE;
                 end
                 // Write all 16 bytes: padding is zeroed for compressed formats.

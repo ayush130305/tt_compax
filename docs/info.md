@@ -3,8 +3,9 @@
 COMPAX (Compressed On-chip Memory with Pipelined Array eXpansion) contains a
 64-byte flip-flop memory and a lossless Base-Delta-Immediate (BDI) codec.
 This implementation processes four little-endian 32-bit words per 16-byte block.
-The codec is combinational; the UART controller sequences memory transfers.
-The name does not imply that this revision has a pipelined codec or an allocator.
+The codec processes one word per cycle using shared arithmetic. The UART
+controller sequences scanning, encoding, decoding, and memory transfers.
+The name does not imply that this revision has an allocator or a pipelined codec.
 
 Commands at 115200 baud, 8N1, with a 25 MHz input clock:
 

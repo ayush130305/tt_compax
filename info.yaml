@@ -15,8 +15,7 @@ project:
     - "compax_top.v"
     - "compax_controller.v"
     - "flop_mem.v"
-    - "bdi_encoder.v"
-    - "bdi_decoder.v"
+    - "bdi_word_alu.v"
     - "uart_rx.v"
     - "uart_tx.v"
 
