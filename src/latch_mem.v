@@ -1,8 +1,12 @@
-// 64 x 8 flip-flop storage; synchronous write, combinational read.
+// latch_mem.v
+// 64 x 8 memory built from plain flip-flops (module name kept so no other file changes).
+// The latch version failed timing repair in the Tiny Tapeout flow, so storage uses flops.
+// Write protocol: present we/waddr/wdata during cycle N; the row is written at the end of
+// cycle N. Reads are combinational.
 
 `default_nettype none
 
-module flop_mem #(
+module latch_mem #(
     parameter integer DEPTH = 64, // number of rows
     parameter integer AW    = 6   // address width, clog2(DEPTH)
 ) (

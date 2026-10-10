@@ -1,9 +1,11 @@
-// COMPAX: UART-controlled 64-byte flop memory with a 16-byte BDI codec.
-// ui_in[0] = UART RX; uo_out[0] = UART TX.
+// project.v
+// Tiny Tapeout trial: UART-controlled 64-byte latch memory. Purpose: check that latch-based
+// storage survives the Tiny Tapeout flow (gds, precheck, gate-level test) before building COMPAX on it.
+//   ui_in[0] = UART RX, uo_out[0] = UART TX. All other pins unused.
 
 `default_nettype none
 
-module tt_um_ayush130305_compax (
+module tt_um_ayush130305_memtrial (
     input  wire [7:0] ui_in,   // dedicated inputs
     output wire [7:0] uo_out,  // dedicated outputs
     input  wire [7:0] uio_in,  // bidirectional pins, input side
@@ -33,7 +35,7 @@ module tt_um_ayush130305_compax (
     );
 
     // This contains the instantiation for the command FSM.
-    compax_controller u_fsm (
+    cmd_fsm u_fsm (
         .clk(clk), .rst(rst),
         .rx_data(rx_data), .rx_valid(rx_valid),
         .tx_data(tx_data), .tx_start(tx_start), .tx_busy(tx_busy),
@@ -46,8 +48,8 @@ module tt_um_ayush130305_compax (
         .tx_line(tx_line), .tx_busy(tx_busy)
     );
 
-    // This contains the instantiation for the flop memory.
-    flop_mem #(.DEPTH(64), .AW(6)) u_mem (
+    // This contains the instantiation for the latch memory.
+    latch_mem #(.DEPTH(64), .AW(6)) u_mem (
         .clk(clk), .we(mem_we), .waddr(mem_addr), .wdata(mem_wdata),
         .raddr(mem_addr), .rdata(mem_rdata)
     );
