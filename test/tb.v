@@ -47,3 +47,10 @@ module tb ();
   );
 
 endmodule
+
+// Decorative metal artwork has no ports or electrical simulation behavior.
+// RTL gets its declaration from compax_top.v; gate-level builds need this stub.
+`ifdef GL_TEST
+module compax_art ();
+endmodule
+`endif

@@ -22,5 +22,31 @@
   "RUN_CTS": 1,
   "FP_PDN_MULTILAYER": 0,
   "MAGIC_DEF_LABELS": 0,
-  "MAGIC_WRITE_LEF_PINONLY": 1
+  "MAGIC_WRITE_LEF_PINONLY": 1,
+  "MACROS": {
+    "compax_art": {
+      "instances": {
+        "art": {
+          "location": [
+            24.2,
+            10
+          ],
+          "orientation": "N"
+        }
+      },
+      "gds": [
+        "dir::../macros/compax_art.gds"
+      ],
+      "lef": [
+        "dir::../macros/compax_art.lef"
+      ]
+    }
+  },
+  "IGNORE_DISCONNECTED_MODULES": [
+    "compax_art",
+    "art"
+  ],
+  "ERROR_ON_DISCONNECTED_PINS": false,
+  "PDN_HORIZONTAL_HALO": 0,
+  "PDN_VERTICAL_HALO": 0
 }
