@@ -6,12 +6,17 @@ A UART-controlled 32-byte flip-flop memory with a lossless 16-byte Base-Delta-Im
 
 Top module `tt_um_ayush130305_compax`, 25 MHz, 115200 baud, 2x2 tiles.
 
-## Why 32 bytes
+## Why 32 bytes and no block buffer
 
-The 64-byte version measured about 47k um^2 in Yosys, which is too large for 2x2.
-The 64-byte flop memory trial hardened at 39.8k um^2 of cells (54.8% of the core), so the
-practical ceiling is about 36-39k um^2 in Yosys. This 32-byte version measures about
-36.1k um^2 in Yosys. Physical fit is still unverified until the GDS action completes.
+The first 64-byte version measured about 47k um^2 in Yosys and was too large for 2x2:
+detailed routing took 30 minutes at about 79% utilization. The codec controller was over half
+of the design because of a 128-bit staging buffer with wide multiplexers.
+
+The codec now works directly in the flop memory, one byte per cycle, with only a 32-bit word
+register, a 32-bit base register and two 16-bit delta registers. Yosys area is about 26.8k um^2
+(controller 11.6k, memory 10.1k, UARTs 3.9k, ALU 1.1k). `src/config.json` uses a 40 ns clock period
+(the chip runs at 25 MHz) and zero hold margin to reduce timing-repair buffers.
+Physical fit is still unverified until the GDS action completes.
 
 ## Validation (Icarus)
 
