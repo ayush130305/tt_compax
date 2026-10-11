@@ -1,5 +1,5 @@
 # test.py
-# cocotb tests for tt_um_ayush130305_memtrial: a UART-controlled 64-byte latch memory.
+# cocotb tests for tt_um_ayush130305_compax: a UART-controlled 32-byte flop memory.
 # Every test drives the chip only through the UART pins, exactly like a real host would.
 
 import random
@@ -10,7 +10,7 @@ from cocotb.triggers import ClockCycles, RisingEdge
 
 CLK_NS = 40        # 25 MHz
 BIT_CLKS = 217     # 25 MHz / 115200 baud
-DEPTH = 64
+DEPTH = 32
 
 
 def tx_bit(dut):
@@ -104,9 +104,9 @@ async def test_01_reset(dut):
 async def test_02_single_write_read(dut):
     """Single-byte write/read at the first, last and a middle address."""
     await start(dut)
-    for addr, val in ((0, 0xA5), (63, 0x5A), (21, 0xFF)):
+    for addr, val in ((0, 0xA5), (31, 0x5A), (21, 0xFF)):
         await write_byte(dut, addr, val)
-    for addr, val in ((0, 0xA5), (63, 0x5A), (21, 0xFF)):
+    for addr, val in ((0, 0xA5), (31, 0x5A), (21, 0xFF)):
         got = await read_byte(dut, addr)
         assert got == val, f"addr {addr}: wrote {val:#x}, read {got:#x}"
 
@@ -121,7 +121,7 @@ async def test_03_unknown_command(dut):
 
 @cocotb.test()
 async def test_04_full_array_patterns(dut):
-    """Fill all 64 rows with three different patterns; every row must read back exactly."""
+    """Fill all 32 rows with three different patterns; every row must read back exactly."""
     await start(dut)
     pat_a = [(i * 37 + 11) & 0xFF for i in range(DEPTH)]
     patterns = [pat_a, [(~x) & 0xFF for x in pat_a], list(range(DEPTH))]
@@ -152,6 +152,63 @@ async def test_06_page_wrap(dut):
     """A page write starting near the end wraps to address 0."""
     await start(dut)
     await write_page(dut, 0, [0] * DEPTH)
-    await write_page(dut, 62, [0x11, 0x22, 0x33, 0x44])
-    assert await read_page(dut, 62, 2) == [0x11, 0x22]
+    await write_page(dut, 30, [0x11, 0x22, 0x33, 0x44])
+    assert await read_page(dut, 30, 2) == [0x11, 0x22]
     assert await read_page(dut, 0, 2) == [0x33, 0x44]
+
+
+@cocotb.test()
+async def test_07_bdi_formats(dut):
+    """Compress, inspect and decompress all five formats through the UART pins."""
+    await start(dut)
+    vectors = [
+        ([0, 0, 0, 0], 1, 0),
+        ([0x12345678] * 4, 2, 4),
+        ([0x10000000, 0x1000007F, 0xFFFFFF80, 7], 0x63, 8),
+        ([0x10000000, 0x10007FFF, 0xFFFF8000, 0x10000080], 0x24, 12),
+        ([0, 0x12345678, 0x87654321, 0xFFFFFFFF], 0, 16),
+    ]
+    for index, (words, meta, size) in enumerate(vectors):
+        slot = index % 2
+        data = list(b"".join(w.to_bytes(4, "little") for w in words))
+        await write_page(dut, slot * 16, data)
+        for command in (0x43, 0x43):
+            await send_byte(dut, command)
+            await send_byte(dut, slot)
+            assert await recv_byte(dut) == 0x4B
+        await send_byte(dut, 0x4D)
+        await send_byte(dut, slot)
+        assert await recv_byte(dut) == meta
+        assert await recv_byte(dut) == size
+        for command in (0x44, 0x44):
+            await send_byte(dut, command)
+            await send_byte(dut, slot)
+            assert await recv_byte(dut) == 0x4B
+        assert await read_page(dut, slot * 16, 16) == data
+
+
+@cocotb.test()
+async def test_08_compressed_write_protection(dut):
+    await start(dut)
+    await write_page(dut, 16, [0] * 16)
+    for b in (0x43, 1):
+        await send_byte(dut, b)
+    assert await recv_byte(dut) == 0x4B
+    await write_byte(dut, 15, 0x55)
+    for sequence in ((0x57, 16, 0xAA), (0x50, 0, 2, 0xBB, 0xCC)):
+        for b in sequence:
+            await send_byte(dut, b)
+        assert await recv_byte(dut) == 0x45
+    for b in (0x4D, 1):
+        await send_byte(dut, b)
+    assert await recv_byte(dut) == 1
+    assert await recv_byte(dut) == 0
+    for command in (0x43, 0x44, 0x4D):
+        for b in (command, 2):
+            await send_byte(dut, b)
+        assert await recv_byte(dut) == 0x3F
+    for b in (0x44, 1):
+        await send_byte(dut, b)
+    assert await recv_byte(dut) == 0x4B
+    assert await read_page(dut, 16, 16) == [0] * 16
+    assert await read_byte(dut, 15) == 0x55
