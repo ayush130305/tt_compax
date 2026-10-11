@@ -28,7 +28,7 @@
       "instances": {
         "art": {
           "location": [
-            24.2,
+            262,
             10
           ],
           "orientation": "N"
@@ -48,5 +48,7 @@
   ],
   "ERROR_ON_DISCONNECTED_PINS": false,
   "PDN_HORIZONTAL_HALO": 0,
-  "PDN_VERTICAL_HALO": 0, "FP_MACRO_HORIZONTAL_HALO": 0, "FP_MACRO_VERTICAL_HALO": 0
+  "PDN_VERTICAL_HALO": 0,
+  "FP_MACRO_HORIZONTAL_HALO": 0,
+  "FP_MACRO_VERTICAL_HALO": 0
 }
